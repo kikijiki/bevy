@@ -49,7 +49,10 @@ use bevy_transform::components::Transform;
 use gltf::{
     accessor::Iter,
     image::Source,
-    mesh::{util::ReadIndices, Mode},
+    mesh::{
+        util::{ReadIndices, ReadNormalDisplacements, ReadPositionDisplacements, ReadTangentDisplacements},
+        Mode,
+    },
     Document, Material, Node, Semantic,
 };
 
@@ -1869,9 +1872,9 @@ impl ImageOrPath {
 
 struct PrimitiveMorphAttributesIter<'s> {
     convert_coordinates: bool,
-    positions: Option<Iter<'s, [f32; 3]>>,
-    normals: Option<Iter<'s, [f32; 3]>>,
-    tangents: Option<Iter<'s, [f32; 3]>>,
+    positions: Option<ReadPositionDisplacements<'s>>,
+    normals: Option<ReadNormalDisplacements<'s>>,
+    tangents: Option<ReadTangentDisplacements<'s>>,
 }
 
 impl<'s> Iterator for PrimitiveMorphAttributesIter<'s> {
