@@ -266,29 +266,62 @@ pub(crate) enum ConvertAttributeError {
     UnknownName(String),
 }
 
-pub(crate) fn convert_attribute(
+pub(crate) fn convert_attribute<'a, 's, F>(
     semantic: gltf::Semantic,
     accessor: gltf::Accessor,
     buffer_data: &Vec<Vec<u8>>,
     custom_vertex_attributes: &HashMap<Box<str>, MeshVertexAttribute>,
     convert_coordinates: bool,
-) -> Result<(MeshVertexAttribute, Values), ConvertAttributeError> {
+    reader: &gltf::mesh::Reader<'a, 's, F>,
+) -> Result<(MeshVertexAttribute, Values), ConvertAttributeError>
+where
+    F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'s [u8]>,
+{
+    // Match on semantic and handle each attribute type
+    match &semantic {
+        // For positions, normals, and tangents, use the gltf reader's specialized methods
+        // which properly handle KHR_mesh_quantization dequantization
+        gltf::Semantic::Positions => {
+            if let Some(positions) = reader.read_positions() {
+                let values = if convert_coordinates {
+                    Values::Float32x3(
+                        positions.map(ConvertCoordinates::convert_coordinates).collect(),
+                    )
+                } else {
+                    Values::Float32x3(positions.collect())
+                };
+                return Ok((Mesh::ATTRIBUTE_POSITION, values));
+            }
+        }
+        gltf::Semantic::Normals => {
+            if let Some(normals) = reader.read_normals() {
+                let values = if convert_coordinates {
+                    Values::Float32x3(
+                        normals.map(ConvertCoordinates::convert_coordinates).collect(),
+                    )
+                } else {
+                    Values::Float32x3(normals.collect())
+                };
+                return Ok((Mesh::ATTRIBUTE_NORMAL, values));
+            }
+        }
+        gltf::Semantic::Tangents => {
+            if let Some(tangents) = reader.read_tangents() {
+                let values = if convert_coordinates {
+                    Values::Float32x4(
+                        tangents.map(ConvertCoordinates::convert_coordinates).collect(),
+                    )
+                } else {
+                    Values::Float32x4(tangents.collect())
+                };
+                return Ok((Mesh::ATTRIBUTE_TANGENT, values));
+            }
+        }
+        _ => {}
+    }
+    
+    // Fall back to generic attribute handling for other attributes
     if let Some((attribute, conversion, convert_coordinates)) = match &semantic {
-        gltf::Semantic::Positions => Some((
-            Mesh::ATTRIBUTE_POSITION,
-            ConversionMode::Any,
-            convert_coordinates,
-        )),
-        gltf::Semantic::Normals => Some((
-            Mesh::ATTRIBUTE_NORMAL,
-            ConversionMode::Any,
-            convert_coordinates,
-        )),
-        gltf::Semantic::Tangents => Some((
-            Mesh::ATTRIBUTE_TANGENT,
-            ConversionMode::Any,
-            convert_coordinates,
-        )),
         gltf::Semantic::Colors(0) => Some((Mesh::ATTRIBUTE_COLOR, ConversionMode::Rgba, false)),
         gltf::Semantic::TexCoords(0) => {
             Some((Mesh::ATTRIBUTE_UV_0, ConversionMode::TexCoord, false))

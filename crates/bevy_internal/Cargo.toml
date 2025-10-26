@@ -179,6 +179,10 @@ pbr_specular_textures = [
   "bevy_gltf?/pbr_specular_textures",
 ]
 
+meshopt_compression = [
+  "bevy_gltf?/meshopt_compression"
+]
+
 # Optimise for WebGL2
 webgl = [
   "bevy_core_pipeline?/webgl",

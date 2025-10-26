@@ -15,6 +15,7 @@ pbr_multi_layer_material_textures = [
 ]
 pbr_anisotropy_texture = ["bevy_pbr/pbr_anisotropy_texture"]
 pbr_specular_textures = ["bevy_pbr/pbr_specular_textures"]
+meshopt_compression = ["gltf/EXT_meshopt_compression", "meshopt"]
 
 [dependencies]
 # bevy
@@ -40,7 +41,7 @@ bevy_platform = { path = "../bevy_platform", version = "0.18.0-dev", default-fea
 ] }
 
 # other
-gltf = { version = "1.4.0", default-features = false, features = [
+gltf = { git = "https://github.com/kikijiki/gltf", branch = "meshopt-quantization-support", default-features = false, features = [
   "KHR_lights_punctual",
   "KHR_materials_transmission",
   "KHR_materials_ior",
@@ -48,6 +49,7 @@ gltf = { version = "1.4.0", default-features = false, features = [
   "KHR_materials_unlit",
   "KHR_materials_emissive_strength",
   "KHR_texture_transform",
+  "KHR_mesh_quantization",
   "extras",
   "extensions",
   "names",
@@ -57,6 +59,7 @@ thiserror = { version = "2", default-features = false }
 base64 = "0.22.0"
 fixedbitset = "0.5"
 itertools = "0.14"
+meshopt = { version = "0.6", optional = true }
 percent-encoding = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.140"
