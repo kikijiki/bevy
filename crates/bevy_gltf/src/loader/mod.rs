@@ -81,6 +81,8 @@ use self::{
     },
 };
 use crate::convert_coordinates::ConvertCoordinates as _;
+#[cfg(feature = "meshopt_compression")]
+use self::extensions::MeshoptCompressionExtension;
 
 /// An error that occurs when loading a glTF file.
 #[derive(Error, Debug)]
@@ -678,6 +680,9 @@ impl GltfLoader {
 
                 let mut mesh = Mesh::new(primitive_topology, settings.load_meshes);
 
+                let reader =
+                    primitive.reader(|buffer| Some(buffer_data[buffer.index()].as_slice()));
+
                 // Read vertex attributes
                 for (semantic, accessor) in primitive.attributes() {
                     if [Semantic::Joints(0), Semantic::Weights(0)].contains(&semantic) {
@@ -692,12 +697,14 @@ impl GltfLoader {
                             error!("Skinned mesh {} used on both skinned and non skin nodes, this is likely to cause an error (NODE_SKINNED_MESH_WITHOUT_SKIN)", primitive_label);
                         }
                     }
+                    
                     match convert_attribute(
                         semantic,
                         accessor,
                         &buffer_data,
                         &loader.custom_vertex_attributes,
                         convert_coordinates,
+                        &reader,
                     ) {
                         Ok((attribute, values)) => mesh.insert_attribute(attribute, values),
                         Err(err) => warn!("{}", err),
@@ -705,8 +712,6 @@ impl GltfLoader {
                 }
 
                 // Read vertex indices
-                let reader =
-                    primitive.reader(|buffer| Some(buffer_data[buffer.index()].as_slice()));
                 if let Some(indices) = reader.read_indices() {
                     mesh.insert_indices(match indices {
                         ReadIndices::U8(is) => Indices::U16(is.map(|x| x as u16).collect()),
@@ -1725,6 +1730,16 @@ async fn load_buffers(
 ) -> Result<Vec<Vec<u8>>, GltfError> {
     const VALID_MIME_TYPES: &[&str] = &["application/octet-stream", "application/gltf-buffer"];
 
+    #[cfg(feature = "meshopt_compression")]
+    // Identify buffers that are targets for meshopt decompression (fallback buffers)
+    let mut meshopt_target_buffers = std::collections::HashSet::new();
+    #[cfg(feature = "meshopt_compression")]
+    for view in gltf.document.views() {
+        if view.meshopt_compression().is_some() {
+            meshopt_target_buffers.insert(view.buffer().index());
+        }
+    }
+
     let mut buffer_data = Vec::new();
     for buffer in gltf.buffers() {
         match buffer.source() {
@@ -1750,11 +1765,24 @@ async fn load_buffers(
                 if let Some(blob) = gltf.blob.as_deref() {
                     buffer_data.push(blob.into());
                 } else {
+                    #[cfg(feature = "meshopt_compression")]
+                    // Check if this buffer is a meshopt fallback buffer
+                    if meshopt_target_buffers.contains(&buffer.index()) {
+                        // Create an empty buffer that will be populated by meshopt decompression
+                        buffer_data.push(Vec::new());
+                    } else {
+                        return Err(GltfError::MissingBlob);
+                    }
+                    #[cfg(not(feature = "meshopt_compression"))]
                     return Err(GltfError::MissingBlob);
                 }
             }
         }
     }
+
+    // Decompress buffer views that use meshopt_compression
+    #[cfg(feature = "meshopt_compression")]
+    MeshoptCompressionExtension::decompress_meshopt_buffer_views(&gltf.document, &mut buffer_data)?;
 
     Ok(buffer_data)
 }
