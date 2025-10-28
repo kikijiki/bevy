@@ -317,28 +317,36 @@ where
                 return Ok((Mesh::ATTRIBUTE_TANGENT, values));
             }
         }
-        _ => {}
-    }
-    
-    // Fall back to generic attribute handling for other attributes
-    if let Some((attribute, conversion, convert_coordinates)) = match &semantic {
-        gltf::Semantic::Colors(0) => Some((Mesh::ATTRIBUTE_COLOR, ConversionMode::Rgba, false)),
+        gltf::Semantic::Colors(0) => {
+            if let Some(colors) = reader.read_colors(0) {
+                return Ok((Mesh::ATTRIBUTE_COLOR, Values::Float32x4(colors.into_rgba_f32().collect())));
+            }
+        }
         gltf::Semantic::TexCoords(0) => {
-            Some((Mesh::ATTRIBUTE_UV_0, ConversionMode::TexCoord, false))
+            if let Some(tex_coords) = reader.read_tex_coords(0) {
+                return Ok((Mesh::ATTRIBUTE_UV_0, Values::Float32x2(tex_coords.into_f32().collect())));
+            }
         }
         gltf::Semantic::TexCoords(1) => {
-            Some((Mesh::ATTRIBUTE_UV_1, ConversionMode::TexCoord, false))
+            if let Some(tex_coords) = reader.read_tex_coords(1) {
+                return Ok((Mesh::ATTRIBUTE_UV_1, Values::Float32x2(tex_coords.into_f32().collect())));
+            }
         }
-        gltf::Semantic::Joints(0) => Some((
-            Mesh::ATTRIBUTE_JOINT_INDEX,
-            ConversionMode::JointIndex,
-            false,
-        )),
-        gltf::Semantic::Weights(0) => Some((
-            Mesh::ATTRIBUTE_JOINT_WEIGHT,
-            ConversionMode::JointWeight,
-            false,
-        )),
+        gltf::Semantic::Joints(0) => {
+            if let Some(joints) = reader.read_joints(0) {
+                return Ok((Mesh::ATTRIBUTE_JOINT_INDEX, Values::Uint16x4(joints.into_u16().collect())));
+            }
+        }
+        gltf::Semantic::Weights(0) => {
+            if let Some(weights) = reader.read_weights(0) {
+                return Ok((Mesh::ATTRIBUTE_JOINT_WEIGHT, Values::Float32x4(weights.into_f32().collect())));
+            }
+        }
+        _ => {}
+    }
+
+    // Fall back to generic attribute handling for custom attributes only
+    if let Some((attribute, conversion, convert_coordinates)) = match &semantic {
         gltf::Semantic::Extras(name) => custom_vertex_attributes
             .get(name.as_str())
             .map(|attr| (*attr, ConversionMode::Any, false)),
